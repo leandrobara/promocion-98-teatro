@@ -1,19 +1,17 @@
 import { waitUntil } from '@vercel/functions';
 
 export default function handler(req, res) {
-
   if (req.method !== 'POST') {
-    return res.status(405).end();
+    return res.status(405).json({
+      error: 'Method not allowed'
+    });
   }
 
   const {
     canal,
     origen,
     campania
-  } = req.body;
-
-  const referer =
-    req.headers.referer || '';
+  } = req.body || {};
 
   const userAgent =
     req.headers['user-agent'] || '';
@@ -22,7 +20,6 @@ export default function handler(req, res) {
     canal: canal || 'desconocido',
     origen: origen || 'desconocido',
     campania: campania || '',
-    referer,
     userAgent
   };
 
