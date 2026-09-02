@@ -1,83 +1,64 @@
-import { waitUntil } from '@vercel/functions';
-
 const PLATEANET_URL =
   'https://www.plateanet.com/obra/34854?obra=PROMOCION-98&paso=inicio';
 
-async function sha256(text) {
-  const data = new TextEncoder().encode(text);
-  const hash = await crypto.subtle.digest('SHA-256', data);
+export default function handler(req, res) {
+  const canal = req.query.canal || 'desconocido';
+  const origen = req.query.origen || 'desconocido';
+  const campania = req.query.campania || '';
 
-  return Array.from(new Uint8Array(hash))
-    .map(byte => byte.toString(16).padStart(2, '0'))
-    .join('');
-}
+  const data = JSON.stringify({
+    canal,
+    origen,
+    campania
+  });
 
-export default {
-  async fetch(request) {
-    const url = new URL(request.url);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
 
-    const canal =
-      url.searchParams.get('canal') || 'desconocido';
+  res.status(200).send(`
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Promoción 98</title>
+</head>
 
-    const origen =
-      url.searchParams.get('origen') || 'desconocido';
+<body>
 
-    const campania =
-      url.searchParams.get('campania') || '';
+<script>
+  const trackingData = ${data};
 
-    const referer =
-      request.headers.get('referer') || '';
-
-    const userAgent =
-      request.headers.get('user-agent') || '';
-
-    // Solo lo usamos para generar la huella.
-    // NO se guarda en Google Sheets.
-    const forwardedFor =
-      request.headers.get('x-forwarded-for') || '';
-
-    const ip =
-      forwardedFor.split(',')[0].trim();
-
-    // Ventanas de 10 segundos
-    const timeBucket =
-      Math.floor(Date.now() / 10000);
-
-    const dedupeKey = await sha256(
-      [
-        ip,
-        userAgent,
-        canal,
-        origen,
-        campania,
-        timeBucket
-      ].join('|')
-    );
-
-    const trackingData = {
-      canal,
-      origen,
-      campania,
-      referer,
-      userAgent,
-      dedupeKey
-    };
-
-    waitUntil(
-      fetch(process.env.GOOGLE_SCRIPT_URL, {
+  async function trackAndRedirect() {
+    try {
+      await fetch('/api/track', {
         method: 'POST',
         headers: {
-          'Content-Type': 'text/plain;charset=utf-8'
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(trackingData)
-      }).catch(error => {
-        console.error('Error registrando clic:', error);
-      })
-    );
+        body: JSON.stringify(trackingData),
+        keepalive: true
+      });
+    } catch (e) {
+      // Nunca impedimos que el usuario llegue a Plateanet
+    }
 
-    return Response.redirect(
-      PLATEANET_URL,
-      302
+    window.location.replace(
+      ${JSON.stringify(PLATEANET_URL)}
     );
   }
-};
+
+  trackAndRedirect();
+</script>
+
+<noscript>
+  <meta
+    http-equiv="refresh"
+    content="0;url=${PLATEANET_URL}"
+  >
+</noscript>
+
+</body>
+</html>
+  `);
+}
