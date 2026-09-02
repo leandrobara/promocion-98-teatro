@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/r/:canal/:origen",
+      "destination": "/api/redirect?canal=:canal&origen=:origen"
+    }
+  ]
+}
