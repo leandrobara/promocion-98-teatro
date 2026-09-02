@@ -3,32 +3,65 @@ import { waitUntil } from '@vercel/functions';
 const PLATEANET_URL =
   'https://www.plateanet.com/obra/34854?obra=PROMOCION-98&paso=inicio';
 
+async function sha256(text) {
+  const data = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+
+  return Array.from(new Uint8Array(hash))
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 export default {
-  fetch(request) {
+  async fetch(request) {
     const url = new URL(request.url);
 
-    // Atribución definida por nosotros
-    const canal = url.searchParams.get('canal') || 'desconocido';
-    const origen = url.searchParams.get('origen') || 'desconocido';
-    const campania = url.searchParams.get('campania') || '';
+    const canal =
+      url.searchParams.get('canal') || 'desconocido';
 
-    // Información adicional enviada por el navegador
-    const referer = request.headers.get('referer') || '';
-    const userAgent = request.headers.get('user-agent') || '';
+    const origen =
+      url.searchParams.get('origen') || 'desconocido';
+
+    const campania =
+      url.searchParams.get('campania') || '';
+
+    const referer =
+      request.headers.get('referer') || '';
+
+    const userAgent =
+      request.headers.get('user-agent') || '';
+
+    // Solo lo usamos para generar la huella.
+    // NO se guarda en Google Sheets.
+    const forwardedFor =
+      request.headers.get('x-forwarded-for') || '';
+
+    const ip =
+      forwardedFor.split(',')[0].trim();
+
+    // Ventanas de 10 segundos
+    const timeBucket =
+      Math.floor(Date.now() / 10000);
+
+    const dedupeKey = await sha256(
+      [
+        ip,
+        userAgent,
+        canal,
+        origen,
+        campania,
+        timeBucket
+      ].join('|')
+    );
 
     const trackingData = {
       canal,
       origen,
       campania,
       referer,
-      userAgent
+      userAgent,
+      dedupeKey
     };
-
-    // Registramos el clic sin hacer esperar al usuario
-    console.log(
-      'GOOGLE_SCRIPT_URL:',
-      process.env.GOOGLE_SCRIPT_URL
-    );
 
     waitUntil(
       fetch(process.env.GOOGLE_SCRIPT_URL, {
@@ -42,7 +75,9 @@ export default {
       })
     );
 
-    // Redirección inmediata a Plateanet
-    return Response.redirect(PLATEANET_URL, 302);
+    return Response.redirect(
+      PLATEANET_URL,
+      302
+    );
   }
 };
